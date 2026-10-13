@@ -30,3 +30,9 @@ async def test_lifespan_exposes_session_service():
     app = create_app()
     async with app.router.lifespan_context(app):
         assert app.state.session_service is not None
+
+
+async def test_lifespan_exposes_runner():
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        assert app.state.runner.session_service is app.state.session_service

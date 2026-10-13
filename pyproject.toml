@@ -11,13 +11,13 @@ dependencies = [
     "pydantic-settings",
     "sqlalchemy[asyncio]",
     "asyncpg",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
     "ruff",
 ]
 

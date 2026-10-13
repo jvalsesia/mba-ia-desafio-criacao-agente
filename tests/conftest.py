@@ -171,3 +171,165 @@ async def client(seeded, no_sessions):
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             c.app = app
             yield c
+
+
+@pytest.fixture
+def scripted():
+    from types import SimpleNamespace
+
+    from tests.scripted import ConfirmationTool, ScriptedModel
+
+    return SimpleNamespace(
+        main=ScriptedModel(), specialists=ScriptedModel(), confirmation=ConfirmationTool()
+    )
+
+
+def build_scripted_runner(scripted, session_service, *, with_confirmation_tool=False):
+    from aurora.agents.runtime import build_app, build_runner
+
+    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists)
+    if with_confirmation_tool:
+        reservations = app.root_agent.find_sub_agent("reservas")
+        reservations.tools.append(scripted.confirmation.tool)
+    return build_runner(app, session_service)
+
+
+@pytest.fixture
+def confirmation_tool_enabled():
+    """Mark a test as needing `acao_com_confirmacao` on the `reservas` specialist."""
+    return True
+
+
+@pytest.fixture
+async def conversation_client(client, scripted, request):
+    with_tool = "confirmation_tool_enabled" in request.fixturenames
+    client.app.state.runner = build_scripted_runner(
+        scripted, client.app.state.session_service, with_confirmation_tool=with_tool
+    )
+    return client
+
+
+@pytest.fixture
+async def empty_session(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    return await open_session(no_sessions, engine, apartment="101")
+
+
+def _event(author, role, part, *, long_running=None):
+    from google.adk.events.event import Event
+    from google.genai import types
+
+    return Event(
+        author=author,
+        invocation_id="inv-pending",
+        content=types.Content(role=role, parts=[part]),
+        long_running_tool_ids={long_running} if long_running else None,
+    )
+
+
+def _tool_call(author, call_id, name, args):
+    from google.genai import types
+
+    return _event(
+        author,
+        "model",
+        types.Part(function_call=types.FunctionCall(id=call_id, name=name, args=args)),
+    )
+
+
+def _confirmation_request(author, conf_id, original, hint, payload=None):
+    from google.genai import types
+
+    confirmation = {"hint": hint, "confirmed": False}
+    if payload is not None:
+        confirmation["payload"] = payload
+    part = types.Part(
+        function_call=types.FunctionCall(
+            id=conf_id,
+            name="adk_request_confirmation",
+            args={"originalFunctionCall": original, "toolConfirmation": confirmation},
+        )
+    )
+    return _event(author, "user", part, long_running=conf_id)
+
+
+def _tool_result(author, call_id, name):
+    from google.genai import types
+
+    part = types.Part(
+        function_response=types.FunctionResponse(
+            id=call_id,
+            name=name,
+            response={"error": "This tool call is rejected or awaiting confirmation."},
+        )
+    )
+    return _event(author, "user", part)
+
+
+def _user_text(text):
+    from google.genai import types
+
+    return _event("user", "user", types.Part(text=text))
+
+
+def pending_events():
+    booking = {"area": "salao-de-festas", "data": "2030-04-20"}
+    guest = {"nome": "Joana Ribeiro", "data": "2030-04-21"}
+    return [
+        _user_text("Reserve o salão de festas para 2030-04-20."),
+        _tool_call("reservas", "adk-fc-reserva", "reservar_area", booking),
+        _confirmation_request(
+            "reservas",
+            "adk-conf-reserva",
+            {"id": "adk-fc-reserva", "name": "reservar_area", "args": booking},
+            "Reserva com taxa",
+            {**booking, "taxa": 150.0},
+        ),
+        _tool_result("reservas", "adk-fc-reserva", "reservar_area"),
+        _user_text("Libere a entrada da Joana Ribeiro no dia 2030-04-21."),
+        _tool_call("visitantes", "adk-fc-visita", "autorizar_visitante", guest),
+        _confirmation_request(
+            "visitantes",
+            "adk-conf-visita",
+            {"id": "adk-fc-visita", "name": "autorizar_visitante", "args": guest},
+            "Liberação de acesso",
+        ),
+        _tool_result("visitantes", "adk-fc-visita", "autorizar_visitante"),
+    ]
+
+
+def answered_event():
+    from google.genai import types
+
+    return _event(
+        "user",
+        "user",
+        types.Part(
+            function_response=types.FunctionResponse(
+                id="adk-conf-reserva",
+                name="adk_request_confirmation",
+                response={"confirmed": False},
+            )
+        ),
+    )
+
+
+@pytest.fixture
+async def session_with_pending(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    session = await open_session(no_sessions, engine, apartment="101")
+    for event in pending_events():
+        await no_sessions.append_event(session, event)
+    return session
+
+
+@pytest.fixture
+async def session_with_answered(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    session = await open_session(no_sessions, engine, apartment="101")
+    for event in [*pending_events(), answered_event()]:
+        await no_sessions.append_event(session, event)
+    return session
