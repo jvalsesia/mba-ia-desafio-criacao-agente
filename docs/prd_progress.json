@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "prd_path": "docs/prd.md",
+  "generated_at": "2026-10-13T13:05:00Z",
+  "features": {
+    "F01": {
+      "name": "Project Foundation and Runtime",
+      "priority": 1,
+      "wave": 1,
+      "dependencies": [],
+      "status": "done",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": "2026-10-13T13:20:24Z",
+      "updated_at": "2026-10-13T13:57:09Z",
+      "completed_at": "2026-10-13T13:57:09Z"
+    },
+    "F02": {
+      "name": "Condominium Data Store",
+      "priority": 1,
+      "wave": 2,
+      "dependencies": [
+        "F01"
+      ],
+      "status": "done",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": "2026-10-13T13:37:50Z",
+      "updated_at": "2026-10-13T13:57:09Z",
+      "completed_at": "2026-10-13T13:57:09Z"
+    },
+    "F03": {
+      "name": "Session Lifecycle and Persistence",
+      "priority": 1,
+      "wave": 3,
+      "dependencies": [
+        "F01",
+        "F02"
+      ],
+      "status": "done",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": "2026-10-13T14:06:20Z",
+      "updated_at": "2026-10-13T14:15:36Z",
+      "completed_at": "2026-10-13T14:15:36Z"
+    },
+    "F04": {
+      "name": "Verification Routes",
+      "priority": 1,
+      "wave": 3,
+      "dependencies": [
+        "F02"
+      ],
+      "status": "done",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": "docs/F04-verification-routes/eval-report-2026-10-13T14-07-24Z.md",
+      "started_at": "2026-10-13T14:06:12Z",
+      "updated_at": "2026-10-13T14:08:39Z",
+      "completed_at": "2026-10-13T14:08:39Z"
+    },
+    "F05": {
+      "name": "Data Restore Command",
+      "priority": 1,
+      "wave": 4,
+      "dependencies": [
+        "F02",
+        "F03"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F06": {
+      "name": "Conversation Orchestration",
+      "priority": 1,
+      "wave": 4,
+      "dependencies": [
+        "F03"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F07": {
+      "name": "Reservations Specialist",
+      "priority": 1,
+      "wave": 5,
+      "dependencies": [
+        "F02",
+        "F06"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F08": {
+      "name": "Visitors Specialist",
+      "priority": 1,
+      "wave": 5,
+      "dependencies": [
+        "F02",
+        "F06"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F09": {
+      "name": "Bylaws Specialist",
+      "priority": 1,
+      "wave": 5,
+      "dependencies": [
+        "F06"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F10": {
+      "name": "Confirmation Flow",
+      "priority": 1,
+      "wave": 6,
+      "dependencies": [
+        "F06",
+        "F07",
+        "F08"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F11": {
+      "name": "Evaluator Flow Self-Check",
+      "priority": 3,
+      "wave": 7,
+      "dependencies": [
+        "F04",
+        "F05",
+        "F09",
+        "F10"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    },
+    "F12": {
+      "name": "Delivery README",
+      "priority": 1,
+      "wave": 7,
+      "dependencies": [
+        "F04",
+        "F05",
+        "F09",
+        "F10"
+      ],
+      "status": "pending",
+      "cycles": 0,
+      "failure_reason": null,
+      "report_path": null,
+      "started_at": null,
+      "updated_at": "2026-10-13T13:05:00Z",
+      "completed_at": null
+    }
+  }
+}
