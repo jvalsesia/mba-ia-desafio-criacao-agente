@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 aurora-api = "aurora.cli:run_api"
+aurora-restore = "aurora.cli:run_restore"
 
 [build-system]
 requires = ["hatchling"]
