@@ -49,3 +49,10 @@ async def test_lifespan_wires_reservation_tools():
             "consultar_disponibilidade",
             "listar_areas",
         ]
+
+
+async def test_lifespan_wires_visitor_tools():
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        agent = app.state.runner.app.root_agent.find_sub_agent("visitantes")
+        assert [t.name for t in agent.tools] == ["autorizar_visitante", "listar_meus_visitantes"]

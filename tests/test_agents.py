@@ -29,6 +29,10 @@ def _reservations_tools():
     return _app().root_agent.find_sub_agent("reservas").tools
 
 
+def _visitors_tools():
+    return _app().root_agent.find_sub_agent("visitantes").tools
+
+
 def _properties(tool):
     schema = tool._get_declaration().parameters_json_schema
     return schema["properties"] if schema else {}
@@ -144,14 +148,56 @@ def test_reservations_agent_keeps_transfer_locks():
     assert agent.disallow_transfer_to_peers is True
 
 
-def test_other_specialists_have_no_tools():
-    root = _app().root_agent
-    assert root.find_sub_agent("visitantes").tools == []
-    assert root.tools[0].agent.tools == []
+def test_bylaws_specialist_has_no_tools():
+    assert _app().root_agent.tools[0].agent.tools == []
+
+
+def test_visitors_agent_has_the_two_tools():
+    assert [t.name for t in _visitors_tools()] == ["autorizar_visitante", "listar_meus_visitantes"]
+
+
+def test_visitor_tool_declarations_match_the_contract():
+    tools = {t.name: t for t in _visitors_tools()}
+    assert list(_properties(tools["autorizar_visitante"])) == ["nome", "data"]
+    schema = tools["autorizar_visitante"]._get_declaration().parameters_json_schema
+    assert schema["required"] == ["nome", "data"]
+    assert _properties(tools["listar_meus_visitantes"]) == {}
+
+
+def test_no_visitor_tool_declares_apartment_or_confirmation():
+    for tool in _visitors_tools():
+        for name in _properties(tool):
+            assert name != "apartamento"
+            assert "apart" not in name and "apto" not in name
+            assert "confirm" not in name
+            assert "context" not in name
+
+
+def test_visitors_instruction_has_no_resident_data():
+    instruction = _app().root_agent.find_sub_agent("visitantes").instruction
+    assert not re.search(r"\b\d{3}\b", instruction)
+    for name in ("Marina", "Paulo", "Duarte", "Nogueira", "Joana", "Ribeiro"):
+        assert name not in instruction
+
+
+def test_visitors_instruction_names_tools_and_date_format():
+    instruction = _app().root_agent.find_sub_agent("visitantes").instruction
+    assert "autorizar_visitante" in instruction and "listar_meus_visitantes" in instruction
+    assert "AAAA-MM-DD" in instruction
+    assert "português" in instruction
+
+
+def test_visitors_agent_keeps_transfer_locks():
+    agent = _app().root_agent.find_sub_agent("visitantes")
+    assert agent.disallow_transfer_to_parent is True
+    assert agent.disallow_transfer_to_peers is True
 
 
 def test_factories_return_new_tool_lists():
     first, second = _reservations_tools(), _reservations_tools()
+    assert first is not second
+    assert all(a is not b for a, b in zip(first, second, strict=True))
+    first, second = _visitors_tools(), _visitors_tools()
     assert first is not second
     assert all(a is not b for a, b in zip(first, second, strict=True))
 
