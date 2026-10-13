@@ -41,7 +41,7 @@ def build_assistant(
         instruction=INSTRUCTION,
         sub_agents=[
             build_reservations_agent(specialists_model, engine),
-            build_visitors_agent(specialists_model),
+            build_visitors_agent(specialists_model, engine),
         ],
         tools=[AgentTool(agent=build_bylaws_agent(specialists_model))],
     )
