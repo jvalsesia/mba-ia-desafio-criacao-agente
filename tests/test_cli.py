@@ -2,6 +2,18 @@ import pytest
 
 from aurora import cli
 from aurora.db import DatabaseUnavailableError
+from aurora.store.errors import SeedDataError, StoreError
+
+
+@pytest.fixture(autouse=True)
+def bootstrap_calls(monkeypatch):
+    calls = []
+
+    async def fake(url, *a, **k):
+        calls.append(url)
+
+    monkeypatch.setattr(cli, "bootstrap_database", fake)
+    return calls
 
 
 @pytest.fixture
@@ -46,3 +58,44 @@ def test_run_api_starts_uvicorn_on_fixed_address(monkeypatch, uvicorn_calls):
     monkeypatch.setattr(cli, "wait_for_database", ok)
     cli.run_api()
     assert uvicorn_calls[0][1] == {"host": "127.0.0.1", "port": 8000}
+
+
+def test_run_api_prepares_database_before_uvicorn(monkeypatch, bootstrap_calls):
+    order = []
+
+    async def ok(url, *a, **k):
+        return None
+
+    async def prepare(url, *a, **k):
+        order.append("bootstrap")
+
+    monkeypatch.setattr(cli, "wait_for_database", ok)
+    monkeypatch.setattr(cli, "bootstrap_database", prepare)
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **k: order.append("uvicorn"))
+    cli.run_api()
+    assert order == ["bootstrap", "uvicorn"]
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (SeedDataError("reservas.json", "JSON inválido"), "reservas.json"),
+        (StoreError(), "Serviço de dados indisponível"),
+    ],
+)
+def test_run_api_exits_1_when_preparation_fails(
+    monkeypatch, capsys, uvicorn_calls, error, expected
+):
+    async def ok(url, *a, **k):
+        return None
+
+    async def fail(url, *a, **k):
+        raise error
+
+    monkeypatch.setattr(cli, "wait_for_database", ok)
+    monkeypatch.setattr(cli, "bootstrap_database", fail)
+    with pytest.raises(SystemExit) as info:
+        cli.run_api()
+    assert info.value.code == 1
+    assert expected in capsys.readouterr().err
+    assert uvicorn_calls == []
