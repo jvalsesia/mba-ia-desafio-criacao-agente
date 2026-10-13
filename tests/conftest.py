@@ -399,3 +399,18 @@ def offline_reservation_tools(offline_engine):
     from aurora.agents.reservation_tools import build_reservation_tools
 
     return _tool_map(build_reservation_tools(offline_engine))
+
+
+@pytest.fixture
+async def visitor_tools(seeded):
+    """The two visitor tools over the `aurora_test` engine, by name (plain coroutines)."""
+    from aurora.agents.visitor_tools import build_visitor_tools
+
+    return _tool_map(build_visitor_tools(seeded))
+
+
+@pytest.fixture
+def offline_visitor_tools(offline_engine):
+    from aurora.agents.visitor_tools import build_visitor_tools
+
+    return _tool_map(build_visitor_tools(offline_engine))
