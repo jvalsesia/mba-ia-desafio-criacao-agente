@@ -1,0 +1,1 @@
+ÿşıÃ( bytes que nao sao utf-8
