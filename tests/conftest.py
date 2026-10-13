@@ -414,3 +414,19 @@ def offline_visitor_tools(offline_engine):
     from aurora.agents.visitor_tools import build_visitor_tools
 
     return _tool_map(build_visitor_tools(offline_engine))
+
+
+@pytest.fixture(scope="session")
+def bylaws():
+    """The bylaws loaded from `dados/` by `load_bylaws`."""
+    from aurora.agents.bylaws_document import load_bylaws
+
+    return load_bylaws()
+
+
+@pytest.fixture
+def bylaws_tools(bylaws):
+    """The bylaws tool built over `bylaws`, by name (plain coroutines)."""
+    from aurora.agents.bylaws_tools import build_bylaws_tools
+
+    return _tool_map(build_bylaws_tools(bylaws))
