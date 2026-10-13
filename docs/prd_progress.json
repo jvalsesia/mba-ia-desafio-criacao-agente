@@ -85,13 +85,13 @@
       "dependencies": [
         "F03"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "/home/jvalsesia/Learning/FullCycle/mba-ia-desafio-criacao-agente/docs/F06-conversation-orchestration/eval-report-2026-10-13T17-50-27Z.md",
+      "started_at": "2026-10-13T17:50:00Z",
+      "updated_at": "2026-10-13T17:53:31Z",
+      "completed_at": "2026-10-13T17:53:31Z"
     },
     "F07": {
       "name": "Reservations Specialist",
