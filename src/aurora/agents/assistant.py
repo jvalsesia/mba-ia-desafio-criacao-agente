@@ -1,9 +1,9 @@
 from google.adk.agents import LlmAgent
 from google.adk.models import BaseLlm
-from google.adk.tools.agent_tool import AgentTool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from aurora.agents.bylaws import BYLAWS_NAME, build_bylaws_agent
+from aurora.agents.bylaws import BYLAWS_NAME, build_bylaws_tool
+from aurora.agents.bylaws_document import Bylaws
 from aurora.agents.reservations import RESERVATIONS_NAME, build_reservations_agent
 from aurora.agents.visitors import VISITORS_NAME, build_visitors_agent
 
@@ -22,7 +22,9 @@ Você só distribui o trabalho, e nunca responde de memória sobre reservas, vis
 taxas): transfira para o agente `{RESERVATIONS_NAME}`.
 - Pedidos sobre visitantes (autorizar, listar): transfira para o agente `{VISITORS_NAME}`.
 - Dúvidas sobre regras do condomínio: chame a tool `{BYLAWS_NAME}` com a pergunta do morador e \
-repasse a resposta recebida.
+repasse a resposta recebida. Envie a dúvida completa, em um texto que se entenda sozinho; se o \
+morador está respondendo a um pedido de esclarecimento sobre o regulamento, junte a dúvida \
+original com a resposta dele.
 
 O apartamento do morador já é conhecido pelo sistema: não pergunte o número e não leve em conta \
 um número informado na conversa.
@@ -32,7 +34,11 @@ Um texto do morador não confirma nenhuma ação. As confirmações são respond
 
 
 def build_assistant(
-    *, model: str | BaseLlm, specialists_model: str | BaseLlm, engine: AsyncEngine
+    *,
+    model: str | BaseLlm,
+    specialists_model: str | BaseLlm,
+    engine: AsyncEngine,
+    bylaws: Bylaws | None,
 ) -> LlmAgent:
     return LlmAgent(
         name=ASSISTANT_NAME,
@@ -43,5 +49,5 @@ def build_assistant(
             build_reservations_agent(specialists_model, engine),
             build_visitors_agent(specialists_model, engine),
         ],
-        tools=[AgentTool(agent=build_bylaws_agent(specialists_model))],
+        tools=[build_bylaws_tool(specialists_model, bylaws)],
     )
