@@ -54,13 +54,13 @@
       "dependencies": [
         "F02"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F04-verification-routes/eval-report-2026-10-13T14-07-24Z.md",
+      "started_at": "2026-10-13T14:06:12Z",
+      "updated_at": "2026-10-13T14:08:39Z",
+      "completed_at": "2026-10-13T14:08:39Z"
     },
     "F05": {
       "name": "Data Restore Command",
