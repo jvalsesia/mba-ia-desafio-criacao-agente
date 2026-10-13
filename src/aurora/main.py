@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from aurora.config import Settings, get_settings
 from aurora.db import create_engine
+from aurora.verification.routes import router as verification_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -18,6 +19,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await app.state.engine.dispose()
 
     app = FastAPI(title="Aurora", lifespan=lifespan)
+
+    app.include_router(verification_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
