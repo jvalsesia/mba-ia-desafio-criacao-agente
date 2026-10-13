@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aurora.sessions.service import APARTMENT_KEY
 from aurora.store import catalog, reservations
 from aurora.store.errors import StoreError
-from aurora.store.models import Availability, DateTaken, ReservationNotFound, UnknownArea
+from aurora.store.models import (
+    Availability,
+    DateTaken,
+    Reservation,
+    ReservationNotFound,
+    UnknownArea,
+)
 
 RESERVE_TOOL = "reservar_area"
 CANCEL_TOOL = "cancelar_reserva"
@@ -81,7 +87,74 @@ async def _safe(work: Awaitable[dict]) -> dict:
         return _unavailable()
 
 
+def _reservation_fields(reservation: Reservation) -> dict:
+    return {
+        "codigo": reservation.code,
+        "area": reservation.area_id,
+        "data": reservation.day.isoformat(),
+    }
+
+
 def build_reservation_tools(engine: AsyncEngine) -> list[FunctionTool]:
+    async def _reserve(area: str, data: str, tool_context: ToolContext) -> dict:
+        apartment = _apartment(tool_context)
+        if apartment is None:
+            return _unavailable()
+        day = _parse_date(data)
+        if day is None:
+            return _refusal(INVALID_DATE, MSG_INVALID_DATE)
+        area_id = _normalize_area(area)
+        found = await catalog.get_area(engine, area_id=area_id)
+        if found is None:
+            return await _unknown_area()
+        fee = float(found.fee)
+        answer = tool_context.tool_confirmation
+        if fee > 0 and answer is None:
+            availability = await reservations.check_availability(engine, area_id=area_id, day=day)
+            if availability is Availability.TAKEN:
+                return _refusal(DATE_TAKEN, MSG_TAKEN_ON_REQUEST)
+            payload = {"area": area_id, "data": day.isoformat(), "taxa": fee}
+            tool_context.request_confirmation(hint=CONFIRMATION_HINT, payload=payload)
+            tool_context.actions.skip_summarization = True
+            return {"status": AWAITING_CONFIRMATION, **payload, "mensagem": MSG_AWAITING}
+        if fee > 0 and not answer.confirmed:
+            return _refusal(NOT_CONFIRMED, MSG_DENIED)
+        approved = fee > 0
+        created = await reservations.create_reservation(
+            engine, apartment=apartment, area_id=area_id, day=day
+        )
+        if isinstance(created, DateTaken):
+            message = MSG_TAKEN_ON_APPROVAL if approved else MSG_TAKEN_ON_REQUEST
+            return _refusal(DATE_TAKEN, message)
+        if isinstance(created, UnknownArea):
+            return await _unknown_area()
+        return {"status": RESERVED, **_reservation_fields(created), "taxa": fee}
+
+    async def _cancel(area: str, data: str, codigo: str, tool_context: ToolContext) -> dict:
+        apartment = _apartment(tool_context)
+        if apartment is None:
+            return _unavailable()
+        code = _normalize_code(codigo)
+        if code:
+            not_found = _refusal(NOT_FOUND, MSG_NOT_FOUND_BY_CODE)
+        else:
+            area_id = _normalize_area(area)
+            if not area_id or not (data or "").strip():
+                return _refusal(INVALID_PARAMETERS, MSG_MISSING_IDENTIFICATION)
+            day = _parse_date(data)
+            if day is None:
+                return _refusal(INVALID_DATE, MSG_INVALID_DATE)
+            not_found = _refusal(NOT_FOUND, MSG_NOT_FOUND_BY_DATE)
+            active = await reservations.list_reservations(engine, apartment=apartment)
+            match = next((r for r in active if r.area_id == area_id and r.day == day), None)
+            if match is None:
+                return not_found
+            code = match.code
+        result = await reservations.cancel_reservation(engine, apartment=apartment, code=code)
+        if isinstance(result, ReservationNotFound):
+            return not_found
+        return {"status": CANCELLED, **_reservation_fields(result)}
+
     async def _list_reservations(tool_context: ToolContext) -> dict:
         apartment = _apartment(tool_context)
         if apartment is None:
@@ -128,6 +201,29 @@ def build_reservation_tools(engine: AsyncEngine) -> list[FunctionTool]:
             "areas": [{"id": a.id, "nome": a.name, "taxa": float(a.fee)} for a in found],
         }
 
+    async def reservar_area(area: str, data: str, tool_context: ToolContext) -> dict:
+        """Reserva uma área comum para o morador desta conversa.
+
+        Áreas com taxa ficam aguardando a confirmação do morador antes de gravar.
+
+        Args:
+            area: id da área: salao-de-festas, churrasqueira ou quadra.
+            data: data da reserva, no formato AAAA-MM-DD.
+        """
+        return await _safe(_reserve(area, data, tool_context))
+
+    async def cancelar_reserva(
+        tool_context: ToolContext, area: str = "", data: str = "", codigo: str = ""
+    ) -> dict:
+        """Cancela uma reserva do próprio morador, por área e data ou pelo código.
+
+        Args:
+            area: id da área da reserva, usado junto com a data.
+            data: data da reserva, no formato AAAA-MM-DD.
+            codigo: código da reserva; tem precedência sobre a área e a data.
+        """
+        return await _safe(_cancel(area, data, codigo, tool_context))
+
     async def listar_minhas_reservas(tool_context: ToolContext) -> dict:
         """Lista as reservas ativas do morador desta conversa.
 
@@ -152,20 +248,9 @@ def build_reservation_tools(engine: AsyncEngine) -> list[FunctionTool]:
         return await _safe(_list_areas(tool_context))
 
     return [
+        FunctionTool(reservar_area),
+        FunctionTool(cancelar_reserva),
         FunctionTool(listar_minhas_reservas),
         FunctionTool(consultar_disponibilidade),
         FunctionTool(listar_areas),
     ]
-
-
-__all__ = [
-    "AREAS_TOOL",
-    "AVAILABILITY_TOOL",
-    "CANCEL_TOOL",
-    "CONFIRMATION_HINT",
-    "LIST_TOOL",
-    "RESERVE_TOOL",
-    "DateTaken",
-    "ReservationNotFound",
-    "build_reservation_tools",
-]
