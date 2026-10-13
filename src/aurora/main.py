@@ -7,6 +7,7 @@ from aurora.db import create_engine
 from aurora.http_errors import install_error_handlers
 from aurora.sessions.routes import router as sessions_router
 from aurora.sessions.service import create_session_service
+from aurora.verification.routes import router as verification_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -26,6 +27,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     install_error_handlers(app)
     app.include_router(sessions_router)
+    app.include_router(verification_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
