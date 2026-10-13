@@ -24,3 +24,9 @@ async def test_lifespan_creates_and_disposes_engine():
         engine = app.state.engine
         assert engine is not None
     assert engine.pool.checkedout() == 0
+
+
+async def test_lifespan_exposes_session_service():
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        assert app.state.session_service is not None
