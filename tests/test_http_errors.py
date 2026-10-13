@@ -23,3 +23,26 @@ def test_unavailable_detail_has_no_internal_data():
 async def test_unknown_route_detail_is_text(client):
     r = await client.get("/nao-existe")
     assert r.status_code == 404 and isinstance(r.json()["detail"], str)
+
+
+async def test_assistant_unavailable_returns_503_with_text_detail():
+    import httpx
+    from fastapi import FastAPI
+
+    from aurora.conversation.service import (
+        ASSISTANT_UNAVAILABLE_MESSAGE,
+        AssistantUnavailableError,
+    )
+    from aurora.http_errors import install_error_handlers
+
+    app = FastAPI()
+    install_error_handlers(app)
+
+    @app.get("/boom")
+    async def boom():
+        raise AssistantUnavailableError()
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/boom")
+    assert r.status_code == 503
+    assert r.json() == {"detail": ASSISTANT_UNAVAILABLE_MESSAGE}
