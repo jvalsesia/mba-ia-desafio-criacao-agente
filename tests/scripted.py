@@ -52,6 +52,12 @@ def tool_call(name: str, args: dict | None = None) -> LlmResponse:
     return _response(types.Part(function_call=types.FunctionCall(name=name, args=args or {})))
 
 
+def tool_calls(*calls: tuple[str, dict]) -> LlmResponse:
+    """One model response carrying several tool calls, from (name, args) pairs."""
+    parts = [types.Part(function_call=types.FunctionCall(name=n, args=a)) for n, a in calls]
+    return LlmResponse(content=types.Content(role="model", parts=parts))
+
+
 def transfer(agent_name: str) -> LlmResponse:
     return tool_call("transfer_to_agent", {"agent_name": agent_name})
 

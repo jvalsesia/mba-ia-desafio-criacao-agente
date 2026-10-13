@@ -56,3 +56,11 @@ async def test_lifespan_wires_visitor_tools():
     async with app.router.lifespan_context(app):
         agent = app.state.runner.app.root_agent.find_sub_agent("visitantes")
         assert [t.name for t in agent.tools] == ["autorizar_visitante", "listar_meus_visitantes"]
+
+
+async def test_lifespan_loads_the_bylaws():
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        agent = app.state.runner.app.root_agent.tools[0].agent
+        assert [t.name for t in agent.tools] == ["ler_capitulo"]
+        assert "4. Piscina (Art. 21 a 28)" in agent.instruction

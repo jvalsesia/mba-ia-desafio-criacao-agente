@@ -184,10 +184,18 @@ def scripted():
     )
 
 
-def build_scripted_runner(scripted, session_service, engine, *, with_confirmation_tool=False):
+def build_scripted_runner(
+    scripted, session_service, engine, *, with_confirmation_tool=False, data_dir=None
+):
     from aurora.agents.runtime import build_app, build_runner
+    from aurora.config import DATA_DIR
 
-    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists, engine=engine)
+    app = build_app(
+        main_model=scripted.main,
+        specialists_model=scripted.specialists,
+        engine=engine,
+        data_dir=data_dir or DATA_DIR,
+    )
     if with_confirmation_tool:
         reservations = app.root_agent.find_sub_agent("reservas")
         reservations.tools.append(scripted.confirmation.tool)
@@ -414,3 +422,19 @@ def offline_visitor_tools(offline_engine):
     from aurora.agents.visitor_tools import build_visitor_tools
 
     return _tool_map(build_visitor_tools(offline_engine))
+
+
+@pytest.fixture(scope="session")
+def bylaws():
+    """The bylaws loaded from `dados/` by `load_bylaws`."""
+    from aurora.agents.bylaws_document import load_bylaws
+
+    return load_bylaws()
+
+
+@pytest.fixture
+def bylaws_tools(bylaws):
+    """The bylaws tool built over `bylaws`, by name (plain coroutines)."""
+    from aurora.agents.bylaws_tools import build_bylaws_tools
+
+    return _tool_map(build_bylaws_tools(bylaws))

@@ -3,6 +3,8 @@ import re
 from google.adk.tools.agent_tool import AgentTool
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from aurora.agents.bylaws import MSG_NOT_FOUND as BYLAWS_NOT_FOUND
+from aurora.agents.bylaws import build_bylaws_agent, shorten
 from aurora.agents.runtime import build_app
 from aurora.config import DATA_DIR
 
@@ -148,8 +150,71 @@ def test_reservations_agent_keeps_transfer_locks():
     assert agent.disallow_transfer_to_peers is True
 
 
-def test_bylaws_specialist_has_no_tools():
-    assert _app().root_agent.tools[0].agent.tools == []
+def _bylaws_agent():
+    return _app().root_agent.tools[0].agent
+
+
+def test_bylaws_specialist_has_the_read_tool():
+    assert [t.name for t in _bylaws_agent().tools] == ["ler_capitulo"]
+
+
+def test_bylaws_tool_keeps_the_request_declaration():
+    tool = _app().root_agent.tools[0]
+    assert tool.name == "regulamento"
+    assert list(_properties(tool)) == ["request"]
+
+
+def test_bylaws_instruction_has_the_index_and_rules():
+    instruction = _bylaws_agent().instruction
+    assert "4. Piscina (Art. 21 a 28)" in instruction
+    assert "ler_capitulo" in instruction
+    assert BYLAWS_NOT_FOUND in instruction
+    assert "português" in instruction
+
+
+def test_bylaws_instruction_has_no_resident_data():
+    instruction = _bylaws_agent().instruction
+    assert "RSV-" not in instruction
+    for name in ("Marina", "Paulo", "Duarte", "Nogueira", "Joana", "Ribeiro"):
+        assert name not in instruction
+
+
+def test_unavailable_bylaws_agent_has_no_tools():
+    agent = build_bylaws_agent(SPECIALISTS, None)
+    assert agent.tools == []
+    assert "Piscina" not in agent.instruction
+    assert agent.before_agent_callback is not None
+
+
+def test_assistant_instruction_asks_for_a_complete_question():
+    instruction = _app().root_agent.instruction
+    assert "dúvida completa" in instruction
+
+
+def test_shorten_keeps_short_text():
+    text = "a" * 800
+    assert shorten(text) == text
+
+
+def test_shorten_cuts_at_a_sentence_end():
+    text = "Primeira frase completa. " * 60
+    result = shorten(text)
+    assert len(result) <= 800
+    assert result.endswith(".")
+    assert result == text[: len(result)].strip()
+
+
+def test_shorten_does_not_cut_after_art():
+    prefix = "Primeira regra. "
+    text = prefix + "y" * (800 - len(prefix) - len(" Art.")) + " Art." + " 22 " + "z " * 200
+    assert text[:800].endswith("Art.") and text[800] == " "
+    assert shorten(text) == "Primeira regra."
+
+
+def test_shorten_without_sentence_end():
+    result = shorten("palavra " * 300)
+    assert len(result) <= 800
+    assert result.endswith("…")
 
 
 def test_visitors_agent_has_the_two_tools():
@@ -194,6 +259,9 @@ def test_visitors_agent_keeps_transfer_locks():
 
 
 def test_factories_return_new_tool_lists():
+    first, second = _bylaws_agent().tools, _bylaws_agent().tools
+    assert first is not second
+    assert all(a is not b for a, b in zip(first, second, strict=True))
     first, second = _reservations_tools(), _reservations_tools()
     assert first is not second
     assert all(a is not b for a, b in zip(first, second, strict=True))
