@@ -184,10 +184,10 @@ def scripted():
     )
 
 
-def build_scripted_runner(scripted, session_service, *, with_confirmation_tool=False):
+def build_scripted_runner(scripted, session_service, engine, *, with_confirmation_tool=False):
     from aurora.agents.runtime import build_app, build_runner
 
-    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists)
+    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists, engine=engine)
     if with_confirmation_tool:
         reservations = app.root_agent.find_sub_agent("reservas")
         reservations.tools.append(scripted.confirmation.tool)
@@ -204,7 +204,10 @@ def confirmation_tool_enabled():
 async def conversation_client(client, scripted, request):
     with_tool = "confirmation_tool_enabled" in request.fixturenames
     client.app.state.runner = build_scripted_runner(
-        scripted, client.app.state.session_service, with_confirmation_tool=with_tool
+        scripted,
+        client.app.state.session_service,
+        client.app.state.engine,
+        with_confirmation_tool=with_tool,
     )
     return client
 

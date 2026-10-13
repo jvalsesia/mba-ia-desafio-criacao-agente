@@ -1,6 +1,7 @@
 import re
 
 from google.adk.tools.agent_tool import AgentTool
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from aurora.agents.runtime import build_app
 from aurora.config import DATA_DIR
@@ -9,8 +10,28 @@ MAIN = "gemini-teste-principal"
 SPECIALISTS = "gemini-teste-especialistas"
 
 
+TOOL_NAMES = [
+    "reservar_area",
+    "cancelar_reserva",
+    "listar_minhas_reservas",
+    "consultar_disponibilidade",
+    "listar_areas",
+]
+
+
 def _app():
-    return build_app(main_model=MAIN, specialists_model=SPECIALISTS)
+    # An engine that never connects: these tests only inspect the agent tree.
+    engine = create_async_engine("postgresql+asyncpg://aurora:aurora@localhost:5999/aurora_test")
+    return build_app(main_model=MAIN, specialists_model=SPECIALISTS, engine=engine)
+
+
+def _reservations_tools():
+    return _app().root_agent.find_sub_agent("reservas").tools
+
+
+def _properties(tool):
+    schema = tool._get_declaration().parameters_json_schema
+    return schema["properties"] if schema else {}
 
 
 def _bylaws_lines():
@@ -72,10 +93,67 @@ def test_assistant_instruction_names_the_specialists():
     assert "português" in instruction
 
 
-def test_specialist_shells_have_no_tools():
+def test_reservations_agent_has_the_five_tools():
+    assert [t.name for t in _reservations_tools()] == TOOL_NAMES
+
+
+def test_tool_declarations_match_the_contract():
+    tools = {t.name: t for t in _reservations_tools()}
+    assert list(_properties(tools["reservar_area"])) == ["area", "data"]
+    assert list(_properties(tools["cancelar_reserva"])) == ["area", "data", "codigo"]
+    assert list(_properties(tools["consultar_disponibilidade"])) == ["area", "data"]
+    assert _properties(tools["listar_minhas_reservas"]) == {}
+    assert _properties(tools["listar_areas"]) == {}
+
+
+def test_no_tool_declares_an_apartment_parameter():
+    for tool in _reservations_tools():
+        for name in _properties(tool):
+            assert name != "apartamento"
+            assert "apart" not in name and "apto" not in name
+            assert "context" not in name
+
+
+def test_cancel_parameters_are_optional():
+    tool = next(t for t in _reservations_tools() if t.name == "cancelar_reserva")
+    schema = tool._get_declaration().parameters_json_schema
+    assert not schema.get("required")
+    assert all(p["type"] == "string" for p in schema["properties"].values())
+
+
+def test_reservations_instruction_has_no_resident_data():
+    instruction = _app().root_agent.find_sub_agent("reservas").instruction
+    assert "RSV-" not in instruction
+    assert not re.search(r"\b\d{3}\b", instruction)
+    assert not re.search(r"\d+[.,]\d{2}", instruction)
+    for name in ("Marina", "Paulo", "Duarte", "Nogueira"):
+        assert name not in instruction
+
+
+def test_reservations_instruction_names_areas_and_date_format():
+    instruction = _app().root_agent.find_sub_agent("reservas").instruction
+    for area in ("salao-de-festas", "churrasqueira", "quadra"):
+        assert area in instruction
+    assert "AAAA-MM-DD" in instruction
+    assert "português" in instruction
+
+
+def test_reservations_agent_keeps_transfer_locks():
+    agent = _app().root_agent.find_sub_agent("reservas")
+    assert agent.disallow_transfer_to_parent is True
+    assert agent.disallow_transfer_to_peers is True
+
+
+def test_other_specialists_have_no_tools():
     root = _app().root_agent
-    for agent in [*root.sub_agents, root.tools[0].agent]:
-        assert agent.tools == []
+    assert root.find_sub_agent("visitantes").tools == []
+    assert root.tools[0].agent.tools == []
+
+
+def test_factories_return_new_tool_lists():
+    first, second = _reservations_tools(), _reservations_tools()
+    assert first is not second
+    assert all(a is not b for a, b in zip(first, second, strict=True))
 
 
 def test_factories_return_new_objects():

@@ -253,7 +253,9 @@ async def test_messages_survive_app_restart(conversation_client, scripted, empty
 
     app = create_app(get_settings())
     async with app.router.lifespan_context(app):
-        app.state.runner = build_scripted_runner(scripted, app.state.session_service)
+        app.state.runner = build_scripted_runner(
+            scripted, app.state.session_service, app.state.engine
+        )
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             after = [e["id"] for e in (await c.get(f"/sessoes/{empty_session.id}/eventos")).json()]
@@ -268,7 +270,9 @@ async def test_pending_survive_app_restart(scripted, session_with_pending):
     scripted.main.script(sc.text("Olá! Como posso ajudar?"))
     app = create_app(get_settings())
     async with app.router.lifespan_context(app):
-        app.state.runner = build_scripted_runner(scripted, app.state.session_service)
+        app.state.runner = build_scripted_runner(
+            scripted, app.state.session_service, app.state.engine
+        )
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             r = await c.post(f"/sessoes/{session_with_pending.id}/mensagens", json={"texto": "Olá"})
