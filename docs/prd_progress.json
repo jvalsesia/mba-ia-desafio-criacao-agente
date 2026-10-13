@@ -132,13 +132,13 @@
       "dependencies": [
         "F06"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F09-bylaws-specialist/eval-report-2026-10-13T20-10-00Z.md",
+      "started_at": "2026-10-13T19:35:18Z",
+      "updated_at": "2026-10-13T20:20:00Z",
+      "completed_at": "2026-10-13T20:20:00Z"
     },
     "F10": {
       "name": "Confirmation Flow",
