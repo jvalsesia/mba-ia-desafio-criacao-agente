@@ -23,6 +23,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             build_app(
                 main_model=resolved.gemini_model_main,
                 specialists_model=resolved.gemini_model_specialists,
+                engine=app.state.engine,
             ),
             app.state.session_service,
         )

@@ -1,6 +1,7 @@
 from google.adk.agents import LlmAgent
 from google.adk.models import BaseLlm
 from google.adk.tools.agent_tool import AgentTool
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aurora.agents.bylaws import BYLAWS_NAME, build_bylaws_agent
 from aurora.agents.reservations import RESERVATIONS_NAME, build_reservations_agent
@@ -30,14 +31,16 @@ Um texto do morador não confirma nenhuma ação. As confirmações são respond
 """
 
 
-def build_assistant(*, model: str | BaseLlm, specialists_model: str | BaseLlm) -> LlmAgent:
+def build_assistant(
+    *, model: str | BaseLlm, specialists_model: str | BaseLlm, engine: AsyncEngine
+) -> LlmAgent:
     return LlmAgent(
         name=ASSISTANT_NAME,
         model=model,
         description=DESCRIPTION,
         instruction=INSTRUCTION,
         sub_agents=[
-            build_reservations_agent(specialists_model),
+            build_reservations_agent(specialists_model, engine),
             build_visitors_agent(specialists_model),
         ],
         tools=[AgentTool(agent=build_bylaws_agent(specialists_model))],

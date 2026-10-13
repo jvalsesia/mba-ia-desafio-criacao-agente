@@ -184,10 +184,10 @@ def scripted():
     )
 
 
-def build_scripted_runner(scripted, session_service, *, with_confirmation_tool=False):
+def build_scripted_runner(scripted, session_service, engine, *, with_confirmation_tool=False):
     from aurora.agents.runtime import build_app, build_runner
 
-    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists)
+    app = build_app(main_model=scripted.main, specialists_model=scripted.specialists, engine=engine)
     if with_confirmation_tool:
         reservations = app.root_agent.find_sub_agent("reservas")
         reservations.tools.append(scripted.confirmation.tool)
@@ -204,7 +204,10 @@ def confirmation_tool_enabled():
 async def conversation_client(client, scripted, request):
     with_tool = "confirmation_tool_enabled" in request.fixturenames
     client.app.state.runner = build_scripted_runner(
-        scripted, client.app.state.session_service, with_confirmation_tool=with_tool
+        scripted,
+        client.app.state.session_service,
+        client.app.state.engine,
+        with_confirmation_tool=with_tool,
     )
     return client
 
@@ -333,3 +336,66 @@ async def session_with_answered(no_sessions, engine):
     for event in [*pending_events(), answered_event()]:
         await no_sessions.append_event(session, event)
     return session
+
+
+OFFLINE_DATABASE_URL = "postgresql+asyncpg://aurora:aurora@localhost:5999/aurora_test"
+
+
+def _tool_map(tools):
+    return {t.name: t.func for t in tools}
+
+
+@pytest.fixture
+async def reservation_tools(seeded):
+    """The five reservation tools over the `aurora_test` engine, by name (plain coroutines)."""
+    from aurora.agents.reservation_tools import build_reservation_tools
+
+    return _tool_map(build_reservation_tools(seeded))
+
+
+@pytest.fixture
+def tool_context_for(session_service):
+    """Build an ADK tool context for a session, optionally carrying a confirmation answer."""
+    from google.adk.agents import LlmAgent
+    from google.adk.agents.context import Context
+    from google.adk.agents.invocation_context import InvocationContext
+    from google.adk.tools.tool_confirmation import ToolConfirmation
+
+    def build(session, confirmed=None, state=None):
+        if state is not None:
+            session = session.model_copy(update={"state": state})
+        invocation = InvocationContext(
+            session_service=session_service,
+            invocation_id="inv-tool",
+            agent=LlmAgent(name="reservas", model="scripted"),
+            session=session,
+        )
+        answer = None if confirmed is None else ToolConfirmation(confirmed=confirmed)
+        return Context(invocation, function_call_id="fc-tool", tool_confirmation=answer)
+
+    return build
+
+
+@pytest.fixture
+async def session_201(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    return await open_session(no_sessions, engine, apartment="201")
+
+
+@pytest.fixture
+async def offline_engine():
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    eng = create_async_engine(OFFLINE_DATABASE_URL)
+    try:
+        yield eng
+    finally:
+        await eng.dispose()
+
+
+@pytest.fixture
+def offline_reservation_tools(offline_engine):
+    from aurora.agents.reservation_tools import build_reservation_tools
+
+    return _tool_map(build_reservation_tools(offline_engine))

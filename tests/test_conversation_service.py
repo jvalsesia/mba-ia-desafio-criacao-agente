@@ -15,8 +15,8 @@ from tests.conftest import build_scripted_runner
 
 
 @pytest.fixture
-def runner(scripted, session_service):
-    return build_scripted_runner(scripted, session_service)
+def runner(scripted, session_service, engine):
+    return build_scripted_runner(scripted, session_service, engine)
 
 
 async def _events(service, session):
@@ -72,8 +72,8 @@ async def test_turn_with_pending_keeps_the_list(
     assert [p.id for p in result.pending] == ["adk-conf-reserva", "adk-conf-visita"]
 
 
-async def test_paused_turn_returns_empty_reply(scripted, session_service, empty_session):
-    runner = build_scripted_runner(scripted, session_service, with_confirmation_tool=True)
+async def test_paused_turn_returns_empty_reply(scripted, session_service, engine, empty_session):
+    runner = build_scripted_runner(scripted, session_service, engine, with_confirmation_tool=True)
     scripted.main.script(sc.transfer("reservas"))
     scripted.specialists.script(sc.tool_call("acao_com_confirmacao", {"descricao": "teste"}))
     result = await send_message(runner, session_service, empty_session, text="Execute.")
@@ -139,7 +139,7 @@ async def test_run_turn_accepts_a_content_message(scripted, runner, session_serv
     assert result.reply == "Ok."
 
 
-async def test_turn_survives_new_runner(scripted, runner, session_service, empty_session):
+async def test_turn_survives_new_runner(scripted, runner, session_service, engine, empty_session):
     from aurora.sessions.service import AuroraSessionService
     from tests.conftest import TEST_DATABASE_URL
 
@@ -147,7 +147,7 @@ async def test_turn_survives_new_runner(scripted, runner, session_service, empty
     await send_message(runner, session_service, empty_session, text="Um")
     other = AuroraSessionService(TEST_DATABASE_URL)
     try:
-        new_runner = build_scripted_runner(scripted, other)
+        new_runner = build_scripted_runner(scripted, other, engine)
         assert len(await _events(other, empty_session)) == 2
         await send_message(new_runner, other, empty_session, text="Dois")
         assert len(await _events(other, empty_session)) == 4
