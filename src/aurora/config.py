@@ -20,20 +20,10 @@ class ConfigError(Exception):
     """Invalid or missing runtime configuration."""
 
 
-class Settings(BaseSettings):
+class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
 
-    google_api_key: str
-    gemini_model_main: str = DEFAULT_MODEL
-    gemini_model_specialists: str = DEFAULT_MODEL
     database_url: str = DEFAULT_DATABASE_URL
-
-    @field_validator("google_api_key")
-    @classmethod
-    def _key_not_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("blank")
-        return value
 
     @field_validator("database_url")
     @classmethod
@@ -47,6 +37,31 @@ class Settings(BaseSettings):
         return value
 
 
+class Settings(DatabaseSettings):
+    google_api_key: str
+    gemini_model_main: str = DEFAULT_MODEL
+    gemini_model_specialists: str = DEFAULT_MODEL
+
+    @field_validator("google_api_key")
+    @classmethod
+    def _key_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("blank")
+        return value
+
+
+INVALID_DATABASE_URL_MESSAGE = (
+    "Configuração inválida: DATABASE_URL não é uma URL postgresql+asyncpg válida."
+)
+
+
+def load_database_url(env_file: str | Path | None = PROJECT_ROOT / ".env") -> str:
+    try:
+        return DatabaseSettings(_env_file=env_file).database_url  # type: ignore[call-arg]
+    except ValidationError:
+        raise ConfigError(INVALID_DATABASE_URL_MESSAGE) from None
+
+
 def load_settings(env_file: str | Path | None = PROJECT_ROOT / ".env") -> Settings:
     try:
         settings = Settings(_env_file=env_file)  # type: ignore[call-arg]
@@ -58,9 +73,7 @@ def load_settings(env_file: str | Path | None = PROJECT_ROOT / ".env") -> Settin
                 "(copie .env.example para .env e preencha a chave do Google AI Studio)."
             ) from None
         if "database_url" in fields:
-            raise ConfigError(
-                "Configuração inválida: DATABASE_URL não é uma URL postgresql+asyncpg válida."
-            ) from None
+            raise ConfigError(INVALID_DATABASE_URL_MESSAGE) from None
         raise ConfigError("Configuração inválida.") from None
     os.environ["GOOGLE_API_KEY"] = settings.google_api_key
     return settings
