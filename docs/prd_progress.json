@@ -101,13 +101,13 @@
         "F02",
         "F06"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F07-reservations-specialist/eval-report-2026-10-13T18-41-27Z.md",
+      "started_at": "2026-10-13T18:36:17Z",
+      "updated_at": "2026-10-13T18:44:21Z",
+      "completed_at": "2026-10-13T18:44:21Z"
     },
     "F08": {
       "name": "Visitors Specialist",
