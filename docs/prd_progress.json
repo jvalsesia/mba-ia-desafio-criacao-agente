@@ -167,13 +167,13 @@
         "F09",
         "F10"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F11-evaluator-flow-self-check/eval-report-2026-10-14T15-00-00Z.md",
+      "started_at": "2026-10-14T14:16:08Z",
+      "updated_at": "2026-10-14T14:33:41Z",
+      "completed_at": "2026-10-14T14:33:41Z"
     },
     "F12": {
       "name": "Delivery README",
