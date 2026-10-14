@@ -52,12 +52,13 @@ def _is_request_confirmation(event) -> bool:
     )
 
 
-async def run_turn(
-    runner: Runner,
-    service: AuroraSessionService,
-    session: Session,
-    message: types.Content,
-) -> ConversationResult:
+@dataclass(frozen=True)
+class TurnOutput:
+    texts: list[str]
+    paused: bool
+
+
+async def execute_turn(runner: Runner, session: Session, message: types.Content) -> TurnOutput:
     texts: list[str] = []
     paused = False
     try:
@@ -72,14 +73,27 @@ async def run_turn(
     except (SQLAlchemyError, OSError) as exc:
         logger.error("session store failure: %s session=%s", type(exc).__name__, session.id)
         raise SessionStoreError() from exc
+    return TurnOutput(texts, paused)
+
+
+async def run_turn(
+    runner: Runner,
+    service: AuroraSessionService,
+    session: Session,
+    message: types.Content,
+) -> ConversationResult:
+    try:
+        output = await execute_turn(runner, session, message)
+    except (AssistantUnavailableError, SessionStoreError):
+        raise
     except Exception as exc:
         logger.error("turn failed: %s session=%s", type(exc).__name__, session.id)
         return ConversationResult(APOLOGY_MESSAGE, await _reread_pending(service, session))
 
     pending = await _reread_pending(service, session)
-    reply = "\n".join(texts)
+    reply = "\n".join(output.texts)
     if not reply:
-        reply = "" if paused else NO_REPLY_MESSAGE
+        reply = "" if output.paused else NO_REPLY_MESSAGE
     return ConversationResult(reply, pending)
 
 

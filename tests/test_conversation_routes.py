@@ -122,6 +122,14 @@ async def test_message_does_not_list_answered(conversation_client, scripted, ses
     assert [i["id"] for i in r.json()["confirmacoes_pendentes"]] == ["adk-conf-visita"]
 
 
+async def test_message_lists_unfinished_answer(
+    conversation_client, scripted, session_with_unfinished_answer
+):
+    scripted.main.script(sc.text("Oi."))
+    r = await post(conversation_client, session_with_unfinished_answer, {"texto": "Olá"})
+    assert [i["id"] for i in r.json()["confirmacoes_pendentes"]] == PENDING_IDS
+
+
 @pytest.mark.usefixtures("confirmation_tool_enabled")
 async def test_paused_run_and_second_message(conversation_client, scripted, empty_session):
     scripted.main.script(sc.transfer("reservas"), sc.text("Olá! Como posso ajudar?"))

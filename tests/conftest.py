@@ -202,6 +202,22 @@ def build_scripted_runner(
     return build_runner(app, session_service)
 
 
+def build_scripted_resume_runners(
+    scripted, session_service, engine, *, with_confirmation_tool=False, tools_engine=None
+):
+    """Resume runners from `build_resume_runners`, with the scripted specialists model."""
+    from aurora.agents.runtime import build_resume_runners
+
+    runners = build_resume_runners(
+        specialists_model=scripted.specialists,
+        engine=tools_engine or engine,
+        session_service=session_service,
+    )
+    if with_confirmation_tool:
+        runners["reservas"].agent.tools.append(scripted.confirmation.tool)
+    return runners
+
+
 @pytest.fixture
 def confirmation_tool_enabled():
     """Mark a test as needing `acao_com_confirmacao` on the `reservas` specialist."""
@@ -217,7 +233,42 @@ async def conversation_client(client, scripted, request):
         client.app.state.engine,
         with_confirmation_tool=with_tool,
     )
+    client.app.state.resume_runners = build_scripted_resume_runners(
+        scripted,
+        client.app.state.session_service,
+        client.app.state.engine,
+        with_confirmation_tool=with_tool,
+    )
     return client
+
+
+@pytest.fixture
+async def restarted_client(conversation_client):
+    """A second app over the same database, with new scripted runners (a process restart)."""
+    from types import SimpleNamespace
+
+    import httpx
+
+    from aurora.config import get_settings
+    from aurora.main import create_app
+    from tests.scripted import ConfirmationTool, ScriptedModel
+
+    second = SimpleNamespace(
+        main=ScriptedModel(), specialists=ScriptedModel(), confirmation=ConfirmationTool()
+    )
+    app = create_app(get_settings())
+    async with app.router.lifespan_context(app):
+        app.state.runner = build_scripted_runner(
+            second, app.state.session_service, app.state.engine
+        )
+        app.state.resume_runners = build_scripted_resume_runners(
+            second, app.state.session_service, app.state.engine
+        )
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            c.app = app
+            c.scripted = second
+            yield c
 
 
 @pytest.fixture
@@ -310,7 +361,7 @@ def pending_events():
     ]
 
 
-def answered_event():
+def answer_event(confirmed=False):
     from google.genai import types
 
     return _event(
@@ -320,10 +371,32 @@ def answered_event():
             function_response=types.FunctionResponse(
                 id="adk-conf-reserva",
                 name="adk_request_confirmation",
-                response={"confirmed": False},
+                response={"confirmed": confirmed},
             )
         ),
     )
+
+
+def answered_event():
+    """The answered session's two events: the denial and the held tool's result."""
+    from google.genai import types
+
+    answer = answer_event(False)
+    result = _event(
+        "reservas",
+        "user",
+        types.Part(
+            function_response=types.FunctionResponse(
+                id="adk-fc-reserva",
+                name="reservar_area",
+                response={
+                    "status": "nao_confirmada",
+                    "mensagem": "A reserva não foi confirmada. Nada foi alterado.",
+                },
+            )
+        ),
+    )
+    return [answer, result]
 
 
 @pytest.fixture
@@ -341,7 +414,17 @@ async def session_with_answered(no_sessions, engine):
     from aurora.sessions.service import open_session
 
     session = await open_session(no_sessions, engine, apartment="101")
-    for event in [*pending_events(), answered_event()]:
+    for event in [*pending_events(), *answered_event()]:
+        await no_sessions.append_event(session, event)
+    return session
+
+
+@pytest.fixture
+async def session_with_unfinished_answer(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    session = await open_session(no_sessions, engine, apartment="101")
+    for event in [*pending_events(), answer_event(True)]:
         await no_sessions.append_event(session, event)
     return session
 

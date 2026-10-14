@@ -38,6 +38,14 @@ async def test_lifespan_exposes_runner():
         assert app.state.runner.session_service is app.state.session_service
 
 
+async def test_lifespan_exposes_resume_runners():
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        runners = app.state.resume_runners
+        assert set(runners) == {"reservas", "visitantes"}
+        assert all(r.session_service is app.state.session_service for r in runners.values())
+
+
 async def test_lifespan_wires_reservation_tools():
     app = create_app()
     async with app.router.lifespan_context(app):

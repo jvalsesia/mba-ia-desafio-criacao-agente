@@ -33,6 +33,8 @@ class ScriptedModel(BaseLlm):
         entry = self.queue.pop(0)
         if isinstance(entry, BaseException):
             raise entry
+        if callable(entry):
+            entry = entry(llm_request)
         yield entry
 
 
@@ -62,6 +64,18 @@ def transfer(agent_name: str) -> LlmResponse:
     return tool_call("transfer_to_agent", {"agent_name": agent_name})
 
 
+def relay_tool_message(llm_request: LlmRequest) -> LlmResponse:
+    """Script entry: answer with the `mensagem` of the last tool result in the request."""
+    for content in reversed(llm_request.contents):
+        for part in reversed(content.parts or []):
+            if part.function_response is not None:
+                message = (part.function_response.response or {}).get("mensagem")
+                return text(
+                    message if isinstance(message, str) and message else "Pedido concluído."
+                )
+    return text("Pedido concluído.")
+
+
 def quota_error() -> errors.ClientError:
     body = {"error": {"code": 429, "message": "quota exceeded", "status": "RESOURCE_EXHAUSTED"}}
     return errors.ClientError(429, body)
@@ -81,6 +95,7 @@ class ConfirmationTool:
 
     def __init__(self) -> None:
         self.executions: list[str] = []
+        self.fail_next = False
 
         def acao_com_confirmacao(descricao: str) -> dict:
             """Executa uma ação de teste.
@@ -88,6 +103,9 @@ class ConfirmationTool:
             Args:
                 descricao: descrição da ação.
             """
+            if self.fail_next:
+                self.fail_next = False
+                raise RuntimeError("falha de teste")
             self.executions.append(descricao)
             return {"status": "executada"}
 
