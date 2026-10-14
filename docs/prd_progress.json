@@ -185,13 +185,13 @@
         "F09",
         "F10"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F12-delivery-readme/eval-report-2026-10-14T15-04-32Z.md",
+      "started_at": "2026-10-14T14:46:00Z",
+      "updated_at": "2026-10-14T15:10:11Z",
+      "completed_at": "2026-10-14T15:10:11Z"
     }
   }
 }
