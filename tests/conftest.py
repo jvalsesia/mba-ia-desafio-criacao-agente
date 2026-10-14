@@ -310,7 +310,7 @@ def pending_events():
     ]
 
 
-def answered_event():
+def answer_event(confirmed=False):
     from google.genai import types
 
     return _event(
@@ -320,10 +320,32 @@ def answered_event():
             function_response=types.FunctionResponse(
                 id="adk-conf-reserva",
                 name="adk_request_confirmation",
-                response={"confirmed": False},
+                response={"confirmed": confirmed},
             )
         ),
     )
+
+
+def answered_event():
+    """The answered session's two events: the denial and the held tool's result."""
+    from google.genai import types
+
+    answer = answer_event(False)
+    result = _event(
+        "reservas",
+        "user",
+        types.Part(
+            function_response=types.FunctionResponse(
+                id="adk-fc-reserva",
+                name="reservar_area",
+                response={
+                    "status": "nao_confirmada",
+                    "mensagem": "A reserva não foi confirmada. Nada foi alterado.",
+                },
+            )
+        ),
+    )
+    return [answer, result]
 
 
 @pytest.fixture
@@ -341,7 +363,17 @@ async def session_with_answered(no_sessions, engine):
     from aurora.sessions.service import open_session
 
     session = await open_session(no_sessions, engine, apartment="101")
-    for event in [*pending_events(), answered_event()]:
+    for event in [*pending_events(), *answered_event()]:
+        await no_sessions.append_event(session, event)
+    return session
+
+
+@pytest.fixture
+async def session_with_unfinished_answer(no_sessions, engine):
+    from aurora.sessions.service import open_session
+
+    session = await open_session(no_sessions, engine, apartment="101")
+    for event in [*pending_events(), answer_event(True)]:
         await no_sessions.append_event(session, event)
     return session
 
