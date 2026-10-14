@@ -41,6 +41,194 @@ graph TD
 
 ## Garantias
 
+Cada garantia aponta o arquivo e o trecho de código que a implementam, copiados literalmente do repositório. `tests/test_readme.py` confere que cada arquivo existe e que cada trecho continua igual ao código, então este README não fica para trás quando o código muda.
+
+### Garantia 1: cobrança ou acesso só depois da confirmação
+
+A tool de reserva só grava uma reserva com taxa depois de receber a resposta de uma confirmação. Sem ela, registra o pedido de confirmação e devolve que nada foi gravado:
+
+**Arquivo:** `src/aurora/agents/reservation_tools.py`
+```python
+fee = float(found.fee)
+answer = tool_context.tool_confirmation
+if fee > 0 and answer is None:
+    availability = await reservations.check_availability(engine, area_id=area_id, day=day)
+    if availability is Availability.TAKEN:
+        return refusal(DATE_TAKEN, MSG_TAKEN_ON_REQUEST)
+    payload = {"area": area_id, "data": day.isoformat(), "taxa": fee}
+    tool_context.request_confirmation(hint=CONFIRMATION_HINT, payload=payload)
+    tool_context.actions.skip_summarization = True
+    return {"status": AWAITING_CONFIRMATION, **payload, "mensagem": MSG_AWAITING}
+if fee > 0 and not answer.confirmed:
+    return refusal(NOT_CONFIRMED, MSG_DENIED)
+```
+
+A autorização de visitante faz o mesmo, sem exceção, porque toda autorização libera acesso:
+
+**Arquivo:** `src/aurora/agents/visitor_tools.py`
+```python
+answer = tool_context.tool_confirmation
+if answer is None:
+    current = await visitors.list_visitors(engine, apartment=apartment)
+    if any(v.day == day and v.name.lower() == name.lower() for v in current):
+        return refusal(ALREADY_AUTHORIZED, MSG_ALREADY_AUTHORIZED)
+    payload = {"nome": name, "data": day.isoformat()}
+    tool_context.request_confirmation(hint=CONFIRMATION_HINT, payload=payload)
+    tool_context.actions.skip_summarization = True
+    return {"status": AWAITING_CONFIRMATION, **payload, "mensagem": MSG_AWAITING}
+if not answer.confirmed:
+    return refusal(NOT_CONFIRMED, MSG_DENIED)
+```
+
+A rota de confirmações só retoma a execução para um `id` pendente na própria sessão; qualquer outro `id` vira `409` sem executar nada:
+
+**Arquivo:** `src/aurora/conversation/confirmations.py`
+```python
+item = next((p for p in pending_confirmations(session) if p.id == confirmation_id), None)
+if item is None:
+    return None
+```
+
+**Por que não depende do modelo:** o modelo só consegue chamar a tool; quem decide se a ação é gravada é o código, pela presença de `tool_context.tool_confirmation`. Essa resposta só existe quando a rota de confirmações entrega um `FunctionResponse` com o `id` pendente, e a conversa não tem como produzi-la: um "já confirmei" escrito pelo morador é só texto. Uma confirmação já respondida deixa de estar pendente, então a ação aprovada roda uma única vez.
+
+### Garantia 2: uma sessão, um apartamento
+
+O apartamento é validado contra o cadastro e gravado no state da sessão uma única vez, na criação:
+
+**Arquivo:** `src/aurora/sessions/service.py`
+```python
+async def open_session(
+    service: AuroraSessionService, engine: AsyncEngine, *, apartment: str
+) -> Session | None:
+    if await get_apartment(engine, number=apartment) is None:
+        return None
+    return await service.create_session(
+        app_name=APP_NAME, user_id=USER_ID, state={APARTMENT_KEY: apartment}
+    )
+```
+
+O `AuroraSessionService.append_event` descarta qualquer tentativa posterior de alterar essa chave:
+
+**Arquivo:** `src/aurora/sessions/service.py`
+```python
+async def append_event(self, session: Session, event: Event) -> Event:
+    if event.actions is not None and event.actions.state_delta:
+        event.actions.state_delta.pop(APARTMENT_KEY, None)
+    return await super().append_event(session, event)
+```
+
+E todas as tools leem o apartamento desse state, nunca de um argumento:
+
+**Arquivo:** `src/aurora/agents/tool_support.py`
+```python
+def apartment_of(tool_context: ToolContext) -> str | None:
+    return tool_context.state.get(APARTMENT_KEY)
+```
+
+**Por que não depende do modelo:** nenhuma tool de reservas ou visitantes recebe o número do apartamento como parâmetro, então o modelo não tem onde escrever "302" mesmo que o morador peça. O valor vem do state gravado na criação da sessão, e o `append_event` remove do `state_delta` qualquer mudança nessa chave antes de persistir o evento. A consulta de disponibilidade devolve só `livre` ou `ocupada`, sem dizer de quem é a reserva.
+
+### Garantia 3: nada se perde no reinício
+
+As sessões ficam no PostgreSQL, pelo serviço de sessão em banco do próprio ADK:
+
+**Arquivo:** `src/aurora/sessions/service.py`
+```python
+class AuroraSessionService(DatabaseSessionService):
+```
+
+**Arquivo:** `src/aurora/sessions/service.py`
+```python
+def create_session_service(settings: Settings) -> AuroraSessionService:
+    return AuroraSessionService(settings.database_url)
+```
+
+Reservas e visitantes ficam em tabelas do mesmo banco, que guarda os dados no volume `aurora_pgdata`:
+
+**Arquivo:** `docker-compose.yml`
+```yaml
+volumes:
+  - aurora_pgdata:/var/lib/postgresql/data
+```
+
+**Por que não depende do modelo:** nada da conversa nem dos dados vive na memória do processo. Cada evento é gravado pelo `DatabaseSessionService` no banco antes de a resposta sair, e as tools gravam reservas e visitantes direto nas tabelas. Ao subir de novo, a API só cria o que falta e lê a sessão pelo `session_id`, com os eventos anteriores e o mesmo state.
+
+### Garantia 4: regulamento consultado, nunca carregado
+
+O regulamento é um especialista embrulhado como agent-tool:
+
+**Arquivo:** `src/aurora/agents/bylaws.py`
+```python
+class BylawsAgentTool(AgentTool):
+```
+
+**Arquivo:** `src/aurora/agents/bylaws.py`
+```python
+def build_bylaws_tool(model: str | BaseLlm, bylaws: Bylaws | None) -> BylawsAgentTool:
+    return BylawsAgentTool(agent=build_bylaws_agent(model, bylaws))
+```
+
+O `assistente` recebe essa tool, e não o texto do regulamento:
+
+**Arquivo:** `src/aurora/agents/assistant.py`
+```python
+return LlmAgent(
+    name=ASSISTANT_NAME,
+    model=model,
+    description=DESCRIPTION,
+    instruction=INSTRUCTION,
+    sub_agents=[
+        build_reservations_agent(specialists_model, engine),
+        build_visitors_agent(specialists_model, engine),
+    ],
+    tools=[build_bylaws_tool(specialists_model, bylaws)],
+)
+```
+
+Dentro do especialista, cada capítulo é lido pela tool `ler_capitulo`, com um limite por pergunta contado no código:
+
+**Arquivo:** `src/aurora/agents/bylaws_tools.py`
+```python
+delivered = state.get(READ_COUNT_KEY, 0)
+if delivered >= MAX_CHAPTERS:
+    return refusal(LIMIT_REACHED, MSG_LIMIT_REACHED)
+state[READ_COUNT_KEY] = delivered + 1
+```
+
+**Por que não depende do modelo:** o texto dos capítulos só chega ao especialista quando ele chama `ler_capitulo`, e o prompt dele tem apenas o índice. O `AgentTool` executa o especialista numa sessão isolada, então os capítulos lidos não entram no histórico da conversa principal; só a resposta curta volta. O limite de capítulos é um contador no state temporário da tool, não um pedido no prompt.
+
+### Garantia 5: dois moradores, uma reserva
+
+O banco tem um índice único parcial: uma reserva ativa por área e data:
+
+**Arquivo:** `src/aurora/store/schema.py`
+```python
+Index(
+    "uq_reservations_active_area_day",
+    reservations.c.area_id,
+    reservations.c.day,
+    unique=True,
+    postgresql_where=text("status = 'active'"),
+)
+```
+
+A gravação usa esse índice como árbitro, em uma única instrução:
+
+**Arquivo:** `src/aurora/store/reservations.py`
+```python
+stmt = (
+    insert(reservations)
+    .values(apartment=apartment, area_id=area_id, day=day)
+    .on_conflict_do_nothing(
+        index_elements=[reservations.c.area_id, reservations.c.day],
+        index_where=text("status = 'active'"),
+    )
+    .returning(*_COLUMNS)
+)
+row = (await conn.execute(stmt)).first()
+```
+
+**Por que não depende do modelo:** a disponibilidade consultada antes serve só para responder ao morador; quem decide é o PostgreSQL. Quando dois pedidos para a mesma área e data chegam juntos, o índice único deixa só um `INSERT` gravar. O outro não devolve linha e vira `DateTaken`, que a tool transforma em "essa data não está disponível". Uma reserva cancelada sai do índice, e a data volta a ficar livre.
+
 ## Como rodar
 
 ### Pré-requisitos
