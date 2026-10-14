@@ -149,13 +149,13 @@
         "F07",
         "F08"
       ],
-      "status": "pending",
+      "status": "done",
       "cycles": 0,
       "failure_reason": null,
-      "report_path": null,
-      "started_at": null,
-      "updated_at": "2026-10-13T13:05:00Z",
-      "completed_at": null
+      "report_path": "docs/F10-confirmation-flow/eval-report-2026-10-14T13-43-06Z.md",
+      "started_at": "2026-10-14T13:30:38Z",
+      "updated_at": "2026-10-14T13:45:29Z",
+      "completed_at": "2026-10-14T13:45:29Z"
     },
     "F11": {
       "name": "Evaluator Flow Self-Check",
