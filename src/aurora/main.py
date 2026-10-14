@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from aurora.agents.runtime import build_app, build_runner
+from aurora.agents.runtime import build_app, build_resume_runners, build_runner
 from aurora.config import Settings, get_settings
 from aurora.conversation.routes import router as conversation_router
 from aurora.db import create_engine
@@ -27,9 +27,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ),
             app.state.session_service,
         )
+        app.state.resume_runners = build_resume_runners(
+            specialists_model=resolved.gemini_model_specialists,
+            engine=app.state.engine,
+            session_service=app.state.session_service,
+        )
         try:
             yield
         finally:
+            for resume_runner in app.state.resume_runners.values():
+                await resume_runner.close()
             await app.state.runner.close()
             await app.state.session_service.close()
             await app.state.engine.dispose()

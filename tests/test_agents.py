@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from aurora.agents.bylaws import MSG_NOT_FOUND as BYLAWS_NOT_FOUND
 from aurora.agents.bylaws import build_bylaws_agent, shorten
-from aurora.agents.runtime import build_app
+from aurora.agents.runtime import build_app, build_resume_runners
 from aurora.config import DATA_DIR
 
 MAIN = "gemini-teste-principal"
@@ -274,3 +274,32 @@ def test_factories_return_new_objects():
     first, second = _app(), _app()
     assert first.root_agent is not second.root_agent
     assert first.root_agent.sub_agents[0] is not second.root_agent.sub_agents[0]
+
+
+def _resume_runners(session_service=None):
+    engine = create_async_engine("postgresql+asyncpg://aurora:aurora@localhost:5999/aurora_test")
+    return build_resume_runners(
+        specialists_model=SPECIALISTS, engine=engine, session_service=session_service
+    )
+
+
+def test_resume_runners_cover_confirming_specialists():
+    assert set(_resume_runners()) == {"reservas", "visitantes"}
+
+
+def test_resume_runner_agent_matches_tree_specialist():
+    tree = _app().root_agent
+    for name, runner in _resume_runners().items():
+        agent = runner.agent
+        specialist = tree.find_sub_agent(name)
+        assert agent.name == specialist.name
+        assert [t.name for t in agent.tools] == [t.name for t in specialist.tools]
+        assert agent.parent_agent is None
+        assert agent is not specialist
+
+
+def test_resume_runners_share_app_name_and_session_service():
+    service = object()
+    for runner in _resume_runners(service).values():
+        assert runner.app_name == "aurora"
+        assert runner.session_service is service

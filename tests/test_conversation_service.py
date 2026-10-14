@@ -6,6 +6,7 @@ from aurora.conversation.service import (
     ASSISTANT_UNAVAILABLE_MESSAGE,
     NO_REPLY_MESSAGE,
     AssistantUnavailableError,
+    execute_turn,
     run_turn,
     send_message,
 )
@@ -153,3 +154,37 @@ async def test_turn_survives_new_runner(scripted, runner, session_service, engin
         assert len(await _events(other, empty_session)) == 4
     finally:
         await other.close()
+
+
+def _message(text):
+    return types.Content(role="user", parts=[types.Part(text=text)])
+
+
+async def test_execute_turn_returns_texts(scripted, runner, empty_session):
+    scripted.main.script(sc.text("Olá!"))
+    output = await execute_turn(runner, empty_session, _message("Olá"))
+    assert output.texts == ["Olá!"]
+    assert output.paused is False
+
+
+@pytest.mark.usefixtures("confirmation_tool_enabled")
+async def test_execute_turn_marks_pause(scripted, session_service, engine, empty_session):
+    runner = build_scripted_runner(scripted, session_service, engine, with_confirmation_tool=True)
+    scripted.main.script(sc.transfer("reservas"))
+    scripted.specialists.script(sc.tool_call("acao_com_confirmacao", {"descricao": "teste"}))
+    output = await execute_turn(runner, empty_session, _message("Execute a ação de teste."))
+    assert output.texts == []
+    assert output.paused is True
+
+
+async def test_execute_turn_translates_model_failure(scripted, runner, empty_session):
+    scripted.main.script(sc.quota_error())
+    with pytest.raises(AssistantUnavailableError):
+        await execute_turn(runner, empty_session, _message("Olá"))
+
+
+async def test_execute_turn_lets_other_errors_out(scripted, runner, empty_session):
+    scripted.main.script(sc.tool_call("ferramenta_inexistente"))
+    with pytest.raises(Exception) as info:
+        await execute_turn(runner, empty_session, _message("Olá"))
+    assert not isinstance(info.value, AssistantUnavailableError)

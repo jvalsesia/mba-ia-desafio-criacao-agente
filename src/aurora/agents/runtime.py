@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aurora.agents.assistant import build_assistant
 from aurora.agents.bylaws_document import load_bylaws
+from aurora.agents.reservations import RESERVATIONS_NAME, build_reservations_agent
+from aurora.agents.visitors import VISITORS_NAME, build_visitors_agent
 from aurora.config import DATA_DIR
 from aurora.sessions.service import APP_NAME
 
@@ -30,3 +32,25 @@ def build_app(
 
 def build_runner(app: App, session_service: BaseSessionService) -> Runner:
     return Runner(app=app, session_service=session_service, auto_create_session=False)
+
+
+def build_resume_runners(
+    *,
+    specialists_model: str | BaseLlm,
+    engine: AsyncEngine,
+    session_service: BaseSessionService,
+) -> dict[str, Runner]:
+    """One Runner per specialist that asks for confirmation, keyed by the agent name."""
+    agents = {
+        RESERVATIONS_NAME: build_reservations_agent(specialists_model, engine),
+        VISITORS_NAME: build_visitors_agent(specialists_model, engine),
+    }
+    return {
+        name: Runner(
+            app_name=APP_NAME,
+            agent=agent,
+            session_service=session_service,
+            auto_create_session=False,
+        )
+        for name, agent in agents.items()
+    }
