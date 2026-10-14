@@ -57,3 +57,13 @@ def run_restore() -> None:
     print(f"Reservas carregadas: {summary.reservations}")
     print(f"Visitantes carregados: {summary.visitors}")
     print(f"Sessões removidas: {summary.sessions}")
+
+
+def run_selfcheck() -> None:
+    from aurora.selfcheck.runner import main
+
+    try:
+        code = main(sys.argv[1:])
+    except KeyboardInterrupt:
+        code = 130
+    raise SystemExit(code)
