@@ -60,6 +60,7 @@ class ApiProcess:
         self.base_url = base_url
         self.log_path = log_path
         self._proc: subprocess.Popen | None = None
+        self.started = False
 
     @property
     def running(self) -> bool:
@@ -73,6 +74,7 @@ class ApiProcess:
         return reply.status_code == 200
 
     async def start(self) -> None:
+        self.started = True
         with self.log_path.open("ab") as log:
             try:
                 self._proc = subprocess.Popen(
