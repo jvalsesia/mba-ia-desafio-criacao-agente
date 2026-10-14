@@ -202,6 +202,22 @@ def build_scripted_runner(
     return build_runner(app, session_service)
 
 
+def build_scripted_resume_runners(
+    scripted, session_service, engine, *, with_confirmation_tool=False, tools_engine=None
+):
+    """Resume runners from `build_resume_runners`, with the scripted specialists model."""
+    from aurora.agents.runtime import build_resume_runners
+
+    runners = build_resume_runners(
+        specialists_model=scripted.specialists,
+        engine=tools_engine or engine,
+        session_service=session_service,
+    )
+    if with_confirmation_tool:
+        runners["reservas"].agent.tools.append(scripted.confirmation.tool)
+    return runners
+
+
 @pytest.fixture
 def confirmation_tool_enabled():
     """Mark a test as needing `acao_com_confirmacao` on the `reservas` specialist."""
@@ -217,7 +233,42 @@ async def conversation_client(client, scripted, request):
         client.app.state.engine,
         with_confirmation_tool=with_tool,
     )
+    client.app.state.resume_runners = build_scripted_resume_runners(
+        scripted,
+        client.app.state.session_service,
+        client.app.state.engine,
+        with_confirmation_tool=with_tool,
+    )
     return client
+
+
+@pytest.fixture
+async def restarted_client(conversation_client):
+    """A second app over the same database, with new scripted runners (a process restart)."""
+    from types import SimpleNamespace
+
+    import httpx
+
+    from aurora.config import get_settings
+    from aurora.main import create_app
+    from tests.scripted import ConfirmationTool, ScriptedModel
+
+    second = SimpleNamespace(
+        main=ScriptedModel(), specialists=ScriptedModel(), confirmation=ConfirmationTool()
+    )
+    app = create_app(get_settings())
+    async with app.router.lifespan_context(app):
+        app.state.runner = build_scripted_runner(
+            second, app.state.session_service, app.state.engine
+        )
+        app.state.resume_runners = build_scripted_resume_runners(
+            second, app.state.session_service, app.state.engine
+        )
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            c.app = app
+            c.scripted = second
+            yield c
 
 
 @pytest.fixture
